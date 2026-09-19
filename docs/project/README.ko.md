@@ -82,7 +82,7 @@ xattr -dr com.apple.quarantine /Applications/codexhost.app
 
 **Windows** - 휴대용/압축 해제 Codex Desktop
 
-휴대용 버전을 사용하는 경우 `CODEXHOST_INSTALL_ROOT`를 Codex Desktop의 압축 해제 디렉터리로 설정하세요:
+압축 해제한 Codex Desktop은 실행 중인 `ChatGPT.exe`를 먼저 감지하고 일반적인 `Codex`/`OpenAI` 폴더도 확인합니다. 여러 복사본이 있으면 `CODEXHOST_INSTALL_ROOT`를 압축 해제 디렉터리로 설정하세요:
 
 ```powershell
 [Environment]::SetEnvironmentVariable("CODEXHOST_INSTALL_ROOT", "D:\CodexPortable", "User")

@@ -29,6 +29,8 @@ use super::PlatformError;
 use super::WindowsAppxActivationIdentity;
 #[cfg(target_os = "windows")]
 use super::canonical_existing_file;
+#[cfg(target_os = "windows")]
+use super::windows_process::{process_entries, process_image_path};
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 pub(super) fn sha256_file(path: &Path) -> Result<String, PlatformError> {
@@ -366,6 +368,129 @@ pub fn discover_desktop_managed_codex_cli() -> Result<PathBuf, PlatformError> {
     })
 }
 
+#[cfg(target_os = "windows")]
+fn portable_root_from_desktop_executable(executable: &Path) -> Option<PathBuf> {
+    let file_name = executable.file_name()?.to_string_lossy();
+    if !file_name.eq_ignore_ascii_case("ChatGPT.exe") {
+        return None;
+    }
+    let app_root = executable.parent()?;
+    if app_root
+        .file_name()
+        .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("app"))
+    {
+        return app_root.parent().map(Path::to_path_buf);
+    }
+    Some(app_root.to_path_buf())
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_appx_path(path: &Path) -> bool {
+    path.components().any(|component| {
+        component
+            .as_os_str()
+            .to_string_lossy()
+            .eq_ignore_ascii_case("WindowsApps")
+    })
+}
+
+/// Recover the package root from an already running unpacked Desktop.
+///
+/// An extracted MSIX has no AppX registration and its directory is allowed to
+/// change between updates. The running `ChatGPT.exe` is the only unambiguous
+/// source of that path, so inspect process image paths without scanning the
+/// user's disk. AppX processes are deliberately ignored; they continue through
+/// the PackageManager path and retain their activation identity.
+#[cfg(target_os = "windows")]
+fn discover_unpacked_desktop_from_running_process()
+-> Result<Option<DesktopInstallation>, PlatformError> {
+    let Ok(entries) = process_entries() else {
+        return Ok(None);
+    };
+    for entry in entries {
+        let executable = match process_image_path(entry.id) {
+            Ok(path) => path,
+            Err(_) => continue,
+        };
+        if is_windows_appx_path(&executable) {
+            continue;
+        }
+        let Some(root) = portable_root_from_desktop_executable(&executable) else {
+            continue;
+        };
+        if let Ok(installation) = discover_codex_desktop_from_root(&root) {
+            return Ok(Some(installation));
+        }
+    }
+    Ok(None)
+}
+
+#[cfg(target_os = "windows")]
+fn unpacked_desktop_search_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Ok(executable) = env::current_exe() {
+        if let Some(parent) = executable.parent() {
+            roots.push(parent.to_path_buf());
+            if let Some(grandparent) = parent.parent() {
+                roots.push(grandparent.to_path_buf());
+            }
+        }
+    }
+    if let Some(local_app_data) = env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+        roots.push(local_app_data.clone());
+        roots.push(local_app_data.join("Programs"));
+    }
+    if let Some(user_profile) = env::var_os("USERPROFILE").map(PathBuf::from) {
+        roots.push(user_profile.join("Downloads"));
+        roots.push(user_profile.join("Desktop"));
+    }
+    roots.sort();
+    roots.dedup();
+    roots
+}
+
+#[cfg(target_os = "windows")]
+fn discover_unpacked_desktop_from_common_locations()
+-> Result<Option<DesktopInstallation>, PlatformError> {
+    let mut candidates = unpacked_desktop_search_roots();
+    let mut directories = Vec::new();
+    while let Some(root) = candidates.pop() {
+        directories.push(root.clone());
+        let Ok(entries) = root.read_dir() else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+            if name.contains("codex") || name.contains("openai") {
+                directories.push(entry.path());
+            }
+        }
+    }
+
+    let mut found = directories
+        .into_iter()
+        .filter_map(|root| discover_codex_desktop_from_root(&root).ok())
+        .collect::<Vec<_>>();
+    found.sort_by(|left, right| {
+        right
+            .desktop_executable
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .cmp(
+                &left
+                    .desktop_executable
+                    .metadata()
+                    .and_then(|metadata| metadata.modified())
+                    .ok(),
+            )
+    });
+    Ok(found.into_iter().next())
+}
+
 #[cfg(all(test, target_os = "windows"))]
 mod desktop_managed_cli_tests {
     use std::fs;
@@ -423,6 +548,43 @@ mod desktop_managed_cli_tests {
     }
 }
 
+#[cfg(all(test, target_os = "windows"))]
+mod unpacked_process_discovery_tests {
+    use std::path::Path;
+
+    use super::{is_windows_appx_path, portable_root_from_desktop_executable};
+
+    #[test]
+    fn running_chatgpt_path_resolves_to_package_root() {
+        assert_eq!(
+            portable_root_from_desktop_executable(Path::new(
+                r"D:\Company\Codex-1.2.3\app\ChatGPT.exe",
+            )),
+            Some(Path::new(r"D:\Company\Codex-1.2.3").to_path_buf())
+        );
+        assert_eq!(
+            portable_root_from_desktop_executable(
+                Path::new(r"D:\Company\Codex-1.2.3\ChatGPT.exe",)
+            ),
+            Some(Path::new(r"D:\Company\Codex-1.2.3").to_path_buf())
+        );
+        assert_eq!(
+            portable_root_from_desktop_executable(Path::new(r"D:\Company\codex.exe")),
+            None
+        );
+    }
+
+    #[test]
+    fn appx_processes_are_not_treated_as_portable_installs() {
+        assert!(is_windows_appx_path(Path::new(
+            r"C:\Program Files\WindowsApps\OpenAI.Codex_1.2.3\app\ChatGPT.exe",
+        )));
+        assert!(!is_windows_appx_path(Path::new(
+            r"D:\Company\WindowsAppsBackup\app\ChatGPT.exe",
+        )));
+    }
+}
+
 #[cfg(target_os = "windows")]
 pub fn discover_codex_desktop() -> Result<DesktopInstallation, PlatformError> {
     if let Some(details) = probe_package_details(env::var_os)? {
@@ -435,6 +597,12 @@ pub fn discover_codex_desktop() -> Result<DesktopInstallation, PlatformError> {
     // and `codexhost inspect`.
     if let Some(root) = custom_install_root(env::var_os) {
         return discover_codex_desktop_from_root(&root);
+    }
+    if let Some(installation) = discover_unpacked_desktop_from_running_process()? {
+        return Ok(installation);
+    }
+    if let Some(installation) = discover_unpacked_desktop_from_common_locations()? {
+        return Ok(installation);
     }
     let details = discover_installed_windows_package()?;
     windows_installation(details, &windows_local_app_data()?)

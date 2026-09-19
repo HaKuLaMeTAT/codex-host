@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-changed=assets/codexhost.ico");
+    println!("cargo:rerun-if-changed=assets/codexhost-light.svg");
     println!("cargo:rerun-if-changed=windows.manifest");
     if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;

@@ -82,7 +82,7 @@ xattr -dr com.apple.quarantine /Applications/codexhost.app
 
 **Windows** - Portable/extracted Codex Desktop
 
-If you use a portable build, set `CODEXHOST_INSTALL_ROOT` to the extracted Codex Desktop directory:
+For an extracted Codex Desktop, codexhost light first detects the running `ChatGPT.exe` and then checks common `Codex`/`OpenAI` folders. If multiple copies are present, set `CODEXHOST_INSTALL_ROOT` to the extracted directory:
 
 ```powershell
 [Environment]::SetEnvironmentVariable("CODEXHOST_INSTALL_ROOT", "D:\CodexPortable", "User")

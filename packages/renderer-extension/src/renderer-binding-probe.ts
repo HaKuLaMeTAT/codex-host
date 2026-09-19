@@ -106,21 +106,8 @@ const externalHarnessIds = {
 } as const;
 
 const externalAgents: readonly ExternalRendererAgent[] = [
-  "pi",
-  "claude-code",
   "deepseek-harness",
   "opencode",
-  "grok",
-  "omp",
-  "antigravity",
-  "kiro-cli",
-  "codebuddy",
-  "workbuddy",
-  "cursor-cli",
-  "hermes",
-  "qoder",
-  "qoder-cn",
-  "zcode",
 ];
 type HarnessAvailability = Partial<Record<ExternalRendererAgent, RendererAgentAvailability>>;
 type HarnessAvailabilityErrors = Partial<Record<ExternalRendererAgent, CodexhostError | undefined>>;

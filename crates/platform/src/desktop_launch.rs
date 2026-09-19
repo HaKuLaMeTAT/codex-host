@@ -63,7 +63,7 @@ fn managed_desktop_environment(
     let cli_path = if external_only {
         canonical_existing_file(&installation.executable_codex_cli)?
     } else {
-        shim_path
+        shim_path.clone()
     };
     let mut environment = vec![
         (

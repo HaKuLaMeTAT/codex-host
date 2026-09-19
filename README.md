@@ -37,6 +37,16 @@ npm.cmd run build:typescript
 npm.cmd run build:rust
 ```
 
+## Windows 发布包
+
+发布命令会生成可直接双击的 `codexhost-light-<version>-windows-x64.exe` 安装包。安装后从开始菜单点击 **codexhost light** 即可启动，不需要在公司电脑上安装 Node、npm 或 Rust：
+
+```powershell
+npm.cmd run release:package -- --target windows-x64
+```
+
+Launcher 会优先读取当前运行中的解压版 Codex，再从常见的 `Codex`/`OpenAI` 目录定位未注册 AppX 的解压版；因此 Codex 每次解压到新的版本目录也不需要改配置。若机器上同时存在多个未运行的副本，仍可用 `CODEXHOST_INSTALL_ROOT` 指定目录。
+
 ## Windows 验收
 
 检查当前仓库是否有 External Host 残留：

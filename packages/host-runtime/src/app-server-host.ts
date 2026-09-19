@@ -739,6 +739,20 @@ export class AppServerHost {
     }));
   }
 
+  async #prewarmExternalAdapters(): Promise<void> {
+    await Promise.all(
+      [...new Set(this.#externalAdapters.values())].map(async (adapter) => {
+        try {
+          await adapter.inspect();
+        } catch (error) {
+          // Availability inspection will surface the same failure in the
+          // Renderer; prewarming must never delay Host startup.
+          this.#diagnose(error);
+        }
+      }),
+    );
+  }
+
   async #loadInstalledPlugins(): Promise<void> {
     if (!this.#options.pluginRoots || this.#pluginLoadAbort.signal.aborted) return;
     const plugins = await loadHarnessPlugins({
@@ -797,7 +811,7 @@ export class AppServerHost {
       }
     }
     // Keep the existing whole-registry loading policy, but do not hold up Desktop initialization.
-    void this.#waitForPlugins();
+    void this.#waitForPlugins().then(() => this.#prewarmExternalAdapters());
     if (this.#closeRequested) await this.#closeOfficialRuntime();
     try {
       if (!this.#externalOnly) void this.#officialRuntime.failure().then(async () => {
