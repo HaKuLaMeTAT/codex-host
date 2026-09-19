@@ -35,6 +35,8 @@ codexhost 不应再作为官方 app-server 的代理、认证持有者或生命�
 
 当前已加入独立 External Host Runtime：Windows Launcher 启动官方 Codex Desktop 时不再注入 codexhost CLI Shim；Desktop Controller 另行启动带令牌的 External Host 子进程。`ExternalThreadHost` 是外部 Host 的组合入口，内部过渡复用 `AppServerHost` 的事件投影，但 `externalOnly` 模式不会初始化官方 app-server。Renderer 的外部请求通过本机 HTTP RPC + WebSocket 事件通道发送给它。发行源码和 TypeScript 引用已删除除 DSH/OpenCode 外的其他 Adapter。Host Runtime 默认入口现在拒绝所有旧官方/远程启动参数，只接受 External Host 入口。
 
+External-only 入口对官方 Runtime、账号、委托和 app-server 连接采用动态依赖加载；外部 Host 启动时不会把这些模块加入运行时模块图。已加载外部 Thread 的历史快照限制为最近 64 个 Turn 或 512KB，访问历史时从原生 Harness 刷新完整内容。侧栏线程归属的 React Fiber 解析使用弱缓存，避免页面更新时重复遍历同一行。
+
 第 1 项已完成关键隔离：`ExternalThreadHost` 的 `externalOnly` 构造不会创建官方 Runtime Scope、官方 Runtime Client 或 Codex Account Control；默认 Host 入口也拒绝旧官方/Remote 启动参数。第 2 项已补充 External HTTP 鉴权和 WebSocket token 边界测试。
 
 DSH 和 OpenCode 的 Permission Mode 由各自 Adapter 提供并持久化：Renderer 可以在 `default`、`ask` 和 `allow`（由原生 Harness 暴露时）之间切换，切换后通过 `codexhost/thread/permission-mode/select` 写回原生 Session，随后也可以切回 `default`。不把权限选择写入 Codex 原生会话。
