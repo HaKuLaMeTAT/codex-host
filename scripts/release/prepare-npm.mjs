@@ -24,23 +24,15 @@ const repositoryRoot = path.resolve(import.meta.dirname, "../..");
 
 export const NPM_PACKAGE_NAME = "@codexhost/cli";
 export const NPM_PLATFORM_PACKAGE_NAMES = Object.freeze({
-  "macos-arm64": "@codexhost/cli-darwin-arm64",
-  "macos-x64": "@codexhost/cli-darwin-x64",
   "windows-x64": "@codexhost/cli-win32-x64",
   "windows-arm64": "@codexhost/cli-win32-arm64",
-  "linux-x64": "@codexhost/cli-linux-x64",
-  "linux-arm64": "@codexhost/cli-linux-arm64",
 });
 export const NPM_RUNTIME_PLATFORM_PACKAGES = Object.freeze({
-  "darwin-arm64": NPM_PLATFORM_PACKAGE_NAMES["macos-arm64"],
-  "darwin-x64": NPM_PLATFORM_PACKAGE_NAMES["macos-x64"],
   "win32-x64": NPM_PLATFORM_PACKAGE_NAMES["windows-x64"],
   "win32-arm64": NPM_PLATFORM_PACKAGE_NAMES["windows-arm64"],
-  "linux-x64": NPM_PLATFORM_PACKAGE_NAMES["linux-x64"],
-  "linux-arm64": NPM_PLATFORM_PACKAGE_NAMES["linux-arm64"],
 });
 export const NPM_PACKAGE_DESCRIPTION =
-  "Run Pi and Claude Code as first-class external harnesses inside Codex Desktop.";
+  "Run DeepSeek Harness and OpenCode as isolated external threads inside Codex Desktop.";
 
 export function npmPlatformPackageName(target) {
   const packageName = NPM_PLATFORM_PACKAGE_NAMES[target.id];
@@ -54,12 +46,6 @@ const runtimeLicenses = [
     license: "Apache-2.0",
     source: "LICENSE",
     output: "Agent-Client-Protocol-SDK-LICENSE.txt",
-  },
-  {
-    packageName: "@anthropic-ai/claude-agent-sdk",
-    license: "SEE LICENSE IN README.md",
-    source: "LICENSE.md",
-    output: "Claude-Agent-SDK-LICENSE.md",
   },
   {
     packageName: "@anthropic-ai/sdk",
@@ -202,9 +188,7 @@ function packageManifest(value, packageName) {
 }
 
 export function npmPackageOs(target) {
-  if (target.hostPlatform === "darwin") return ["darwin"];
   if (target.hostPlatform === "win32") return ["win32"];
-  if (target.hostPlatform === "linux") return ["linux"];
   throw new Error(`unsupported npm package platform: ${target.hostPlatform}`);
 }
 
@@ -457,48 +441,15 @@ const updateEnvironment = {
   CODEXHOST_NPM_LAUNCHER_PATH: fileURLToPath(import.meta.url),
   CODEXHOST_NPM_PACKAGE_ROOT: packageRoot,
 };
-// A managed SSH installation deliberately exports these variables from the
-// remote login profile so stock Codex can enter the remote Host. When this npm
-// command starts the local Desktop on that same machine, replace the remote
-// bootstrap with a local data root. CODEXHOST_CLAUDE_COMMAND is intentionally
-// shared and therefore preserved.
-const remoteSshBootstrapEnvironment = [
-  "CODEX_INSTALL_DIR",
-  "CODEXHOST_DATA_DIR",
-  "CODEXHOST_DEFAULT_AGENT",
-  "CODEXHOST_HOST_NODE_PATH",
-  "CODEXHOST_HOST_RUNTIME_PATH",
-  "CODEXHOST_REMOTE_SSH_MANAGED",
-  "CODEXHOST_STOCK_CODEX_PATH",
-];
-if (updateEnvironment.CODEXHOST_REMOTE_SSH_MANAGED === "1") {
-  for (const name of remoteSshBootstrapEnvironment) delete updateEnvironment[name];
-  updateEnvironment.CODEXHOST_DATA_DIR = path.join(homedir(), ".codexhost");
-}
-
 let launchArguments;
-let remoteArguments = null;
-let brokerArguments = null;
-let delegationArguments = null;
 if (userArguments.length === 0) {
   launchArguments = ["launch"];
 } else if (userArguments[0] === "launch") {
   launchArguments = userArguments;
 } else if (userArguments[0] === "inspect") {
   launchArguments = userArguments;
-} else if (userArguments[0] === "remote") {
-  launchArguments = null;
-  remoteArguments = userArguments.slice(1);
-} else if (userArguments[0] === "broker") {
-  launchArguments = null;
-  brokerArguments = userArguments.slice(1);
-} else if (
-  userArguments[0] === "harness" ||
-  userArguments[0] === "delegate" ||
-  userArguments[0] === "thread"
-) {
-  launchArguments = null;
-  delegationArguments = userArguments;
+} else if (userArguments[0] === "harness" || userArguments[0] === "delegate" || userArguments[0] === "thread" || userArguments[0] === "remote" || userArguments[0] === "broker") {
+  fail("this Windows-only build does not include remote, broker, or delegation commands");
 } else if (userArguments[0] === "--help" || userArguments[0] === "-h") {
   console.log(
     [
@@ -507,12 +458,6 @@ if (userArguments.length === 0) {
       "  codexhost --version",
       "  codexhost inspect",
       "  codexhost launch [launcher options]",
-      "  codexhost remote install|start|stop|status|uninstall",
-      "  codexhost broker install|status|stop|uninstall",
-      "  codexhost delegate --help",
-      "  codexhost harness inspect ...",
-      "  codexhost delegate start ...",
-      "  codexhost thread send|cancel|read|wait|list ...",
       "",
       "This npm package uses the current Node.js runtime and the packaged",
       "Rust launcher/shim. Codex Desktop must already be installed.",
@@ -551,113 +496,7 @@ if (launchArguments?.[0] === "launch") {
   launchArguments = ["launch", ...extras, ...launchArguments.slice(1)];
 }
 
-if (delegationArguments !== null) {
-  const child = spawn(
-    process.execPath,
-    [hostRuntime, "--codexhost-delegation-cli", ...delegationArguments],
-    {
-      env: {
-        ...updateEnvironment,
-        CODEXHOST_CLI_PATH: fileURLToPath(import.meta.url),
-      },
-      stdio: "inherit",
-      windowsHide: true,
-    },
-  );
-  child.on("error", (error) => fail(error.message));
-  child.on("exit", (code, signal) => {
-    if (signal) {
-      process.kill(process.pid, signal);
-      return;
-    }
-    process.exit(code ?? 1);
-  });
-} else if (brokerArguments !== null) {
-  const child = spawn(
-    launcher,
-    [
-      "broker",
-      ...brokerArguments,
-      "--node", process.execPath, "--host-runtime", hostRuntime,
-    ],
-    {
-      env: updateEnvironment,
-      stdio: "inherit",
-      windowsHide: true,
-    },
-  );
-  child.on("error", (error) => fail(error.message));
-  child.on("exit", (code, signal) => {
-    if (signal) {
-      process.kill(process.pid, signal);
-      return;
-    }
-    process.exit(code ?? 1);
-  });
-} else if (remoteArguments !== null) {
-  const runNativeBroker = (command) => {
-    const broker = spawn(
-      launcher,
-      ["broker", command, "--node", process.execPath, "--host-runtime", hostRuntime],
-      {
-        env: updateEnvironment,
-        // remote status is a stable JSON stdout surface. Keep the broker's
-        // human-readable status beside it on stderr instead of corrupting JSON.
-        stdio: command === "status" ? ["inherit", process.stderr, "inherit"] : "inherit",
-        windowsHide: true,
-      },
-    );
-    broker.on("error", (error) => fail(error.message));
-    broker.on("exit", (code, signal) => {
-      if (signal) {
-        process.kill(process.pid, signal);
-        return;
-      }
-      process.exit(code ?? 1);
-    });
-  };
-  const child = spawn(
-    process.execPath,
-    [
-      hostRuntime,
-      "--codexhost-remote",
-      ...remoteArguments,
-      "--node",
-      process.execPath,
-      "--shim",
-      shim,
-      "--host-runtime",
-      hostRuntime,
-    ],
-    {
-      env: updateEnvironment,
-      stdio: "inherit",
-      windowsHide: true,
-    },
-  );
-  child.on("error", (error) => fail(error.message));
-  child.on("exit", (code, signal) => {
-    if (signal) {
-      process.kill(process.pid, signal);
-      return;
-    }
-    if (code === 0 && process.platform === "darwin") {
-      if (remoteArguments[0] === "install") {
-        runNativeBroker("install");
-        return;
-      }
-      if (remoteArguments[0] === "status") {
-        runNativeBroker("status");
-        return;
-      }
-      if (remoteArguments[0] === "uninstall") {
-        runNativeBroker("uninstall");
-        return;
-      }
-    }
-    process.exit(code ?? 1);
-  });
-} else if (launchArguments?.[0] === "launch") {
+if (launchArguments?.[0] === "launch") {
   // The Launcher prints "ready" once the Desktop, Controller, and Host chain
   // are up, then detaches from the terminal to keep supervising. Windows
   // command hosts may clean up a completed command's process tree, so keep the
@@ -750,12 +589,6 @@ codexhost
 codexhost --version
 codexhost inspect
 codexhost launch
-codexhost remote install
-codexhost remote start
-codexhost remote stop
-codexhost remote status
-codexhost remote uninstall
-codexhost broker status
 \`\`\`
 
 The \`codexhost\` command launches the packaged Rust launcher with:
@@ -766,14 +599,12 @@ The \`codexhost\` command launches the packaged Rust launcher with:
 ## Requirements
 
 - Node.js 22 or 24 (Node 20 and older are not supported)
-- Official ChatGPT/Codex Desktop for macOS, Windows, or Linux
-- Pi on \`PATH\` when using the Pi agent
-- Claude Code installed when using the Claude Code adapter
+- Official ChatGPT/Codex Desktop for Windows
+- DeepSeek Harness and OpenCode installed/configured for external threads
 
 ## Notes
 
 - This npm package does **not** embed a private Node.js runtime.
-- On macOS, \`remote install\` manages the current-user Aqua Harness broker; it never asks for a Keychain password or copies Claude credentials.
 - Installer packages (DMG/EXE) remain the zero-dependency desktop distribution path.
 - Prefer \`npm install -g ${NPM_PACKAGE_NAME}\` over installing the monorepo root.
 `;

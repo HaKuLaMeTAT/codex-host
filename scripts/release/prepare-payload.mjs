@@ -20,18 +20,6 @@ const runtimeLicenses = [
     output: "Agent-Client-Protocol-SDK-LICENSE.txt",
   },
   {
-    packageName: "@anthropic-ai/claude-agent-sdk",
-    license: "SEE LICENSE IN README.md",
-    source: "LICENSE.md",
-    output: "Claude-Agent-SDK-LICENSE.md",
-  },
-  {
-    packageName: "@anthropic-ai/sdk",
-    license: "MIT",
-    source: "LICENSE",
-    output: "Anthropic-SDK-LICENSE.txt",
-  },
-  {
     packageName: "@modelcontextprotocol/sdk",
     license: "MIT",
     source: "LICENSE",

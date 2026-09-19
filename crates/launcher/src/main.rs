@@ -5,7 +5,6 @@ mod compatibility;
 mod desktop_attachment;
 mod desktop_path_overrides;
 mod installation_layout;
-mod native_harness_broker;
 mod runtime_instance;
 #[cfg(target_os = "linux")]
 mod secure_storage;
@@ -53,7 +52,6 @@ use desktop_attachment::{
     endpoint_ready, publish_runtime_descriptor, stop_stale_launcher, wait_for_host_chain,
 };
 use installation_layout::InstalledResources;
-use native_harness_broker::run_native_harness_broker_cli;
 use runtime_instance::{
     StartupObservation, StartupState, classify_startup, default_descriptor_path, read_descriptor,
     remove_matching_descriptor,
@@ -124,7 +122,7 @@ impl Error for UnmanagedDesktopConflict {}
 
 fn usage() {
     eprintln!(
-        "usage:\n  codexhost\n  codexhost inspect [--custom-install <absolute-directory>]\n  codexhost launch [--shim <absolute-file>] [--node <absolute-file>] [--host-runtime <absolute-file>] [--desktop-controller <absolute-file>] [--renderer <absolute-file>] [--pi <absolute-file>] [--custom-install <absolute-directory>]\n  codexhost broker install|status|stop|uninstall\n  codexhost delegate --help\n  codexhost harness inspect ...\n  codexhost delegate start ...\n  codexhost thread send|cancel|read|wait|list ..."
+        "usage:\n  codexhost\n  codexhost inspect [--custom-install <absolute-directory>]\n  codexhost launch [--shim <absolute-file>] [--node <absolute-file>] [--host-runtime <absolute-file>] [--desktop-controller <absolute-file>] [--renderer <absolute-file>] [--pi <absolute-file>] [--custom-install <absolute-directory>]\n  codexhost delegate --help\n  codexhost harness inspect ...\n  codexhost delegate start ...\n  codexhost thread send|cancel|read|wait|list ..."
     );
 }
 
@@ -470,6 +468,8 @@ fn desktop_controller_command(
         .arg(&control.renderer_cdp_endpoint)
         .arg("--renderer")
         .arg(&options.renderer_extension)
+        .arg("--host-runtime")
+        .arg(&options.host_runtime)
         .arg("--default-agent")
         .arg("codex")
         .arg("--attachment-port")
@@ -713,7 +713,11 @@ fn supervise_desktop(
     let mut controller = start_desktop_controller(options, control, environment)?;
     let desktop_pid = desktop.root_snapshot().id;
     startup_trace("waiting for Host chain");
-    if !wait_for_host_chain(desktop_pid, options, Duration::from_secs(30))? {
+    if environment
+        .iter()
+        .all(|(name, value)| !(name == "CODEXHOST_EXTERNAL_ONLY" && value == "1"))
+        && !wait_for_host_chain(desktop_pid, options, Duration::from_secs(30))?
+    {
         let _ = stop_desktop_controller(&mut controller);
         let _ = desktop.shutdown(Duration::from_secs(2));
         return Err("Codex Desktop did not start the codexhost Host chain before timeout".into());
@@ -803,7 +807,11 @@ fn supervise_desktop(
         }
     };
     startup_trace("waiting for Host chain");
-    if !wait_for_host_chain(desktop_pid, options, Duration::from_secs(30))? {
+    if environment
+        .iter()
+        .all(|(name, value)| !(name == "CODEXHOST_EXTERNAL_ONLY" && value == "1"))
+        && !wait_for_host_chain(desktop_pid, options, Duration::from_secs(30))?
+    {
         let _ = stop_desktop_controller(&mut controller);
         let _ = desktop.kill();
         let _ = desktop.wait();
@@ -895,6 +903,10 @@ fn desktop_environment(
         (
             OsString::from(CONTROL_NONCE_ENV),
             OsString::from(&control.nonce),
+        ),
+        (
+            OsString::from("CODEXHOST_EXTERNAL_ONLY"),
+            OsString::from("1"),
         ),
     ];
     if let Some(pi) = &options.pi {
@@ -1217,7 +1229,6 @@ fn run(arguments: &[String]) -> Result<(), Box<dyn Error>> {
             codexhost_platform::open_external_url(&url).map_err(Into::into)
         }
         Some("open-loopback-url") => Err("open-loopback-url accepts no arguments".into()),
-        Some("broker") => run_native_harness_broker_cli(&arguments[1..]),
         Some("harness") | Some("delegate") | Some("thread") => run_delegation_cli(arguments),
         _ => {
             usage();
@@ -1531,6 +1542,8 @@ mod tests {
                 "http://127.0.0.1:43123",
                 "--renderer",
                 "/opt/renderer-extension.js",
+                "--host-runtime",
+                "/opt/host-runtime.mjs",
                 "--default-agent",
                 "codex",
                 "--attachment-port",

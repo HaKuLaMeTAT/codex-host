@@ -51,20 +51,16 @@ ${NPM_PACKAGE_DESCRIPTION}
 npm install -g ${NPM_PACKAGE_NAME}@${version}
 \`\`\`
 
-npm automatically installs the matching macOS, Windows, or Linux platform package. Node.js 22 or 24 and the official ChatGPT/Codex Desktop are required.
+npm installs the matching Windows x64 or arm64 platform package. Node.js 22 or 24 and the official Codex Desktop are required.
 
 ## Usage
 
 \`\`\`bash
 codexhost --version
 codexhost
-codexhost remote install
-codexhost remote status
 \`\`\`
 
-The \`codexhost\` command starts Codex Desktop. On macOS and Linux it returns immediately while the packaged Launcher keeps supervising in the background. On Windows, the command remains attached until Codex Desktop exits so shells that clean up process trees of completed commands cannot discard the supervisor. Re-running \`codexhost\` attaches to the same controlled instance.
-
-On macOS, \`remote install\` installs a current-user Aqua Harness broker so Background SSH Hosts can use native Claude Code login without reading, copying, or unlocking Keychain credentials.
+The \`codexhost\` command starts Codex Desktop and its isolated DSH/OpenCode External Host on Windows.
 
 If installation used \`--omit=optional\`, reinstall without that option so npm can select the native package for the current architecture.
 `;

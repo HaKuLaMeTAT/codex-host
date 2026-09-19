@@ -22,7 +22,11 @@ export const KNOWN_RENDERER_AGENTS = [
   "qoder-cn",
   "zcode",
 ] as const;
-export const DEFAULT_RENDERER_AGENTS = KNOWN_RENDERER_AGENTS;
+export const DEFAULT_RENDERER_AGENTS = [
+  "codex",
+  "deepseek-harness",
+  "opencode",
+] as const satisfies readonly RendererAgent[];
 export type RendererAgent = (typeof KNOWN_RENDERER_AGENTS)[number];
 export type ExternalRendererAgent = Exclude<RendererAgent, "codex">;
 export type RendererAgentAvailability =

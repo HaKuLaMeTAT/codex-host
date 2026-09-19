@@ -9,8 +9,8 @@ const RELEASE_NOTES_URL_PATTERN =
   /^https:\/\/github\.com\/BytePioneer-AI\/codex-host\/releases\/tag\/(v[0-9A-Za-z.+-]+)$/u;
 const DOWNLOAD_URL_PREFIX = "https://github.com/BytePioneer-AI/codex-host/releases/download/";
 
-export type InstallerReleaseTarget = "macos-arm64" | "macos-x64" | "windows-x64" | "windows-arm64";
-export type ReleaseTarget = InstallerReleaseTarget | "linux-x64" | "linux-arm64";
+export type InstallerReleaseTarget = "windows-x64" | "windows-arm64";
+export type ReleaseTarget = InstallerReleaseTarget;
 
 export interface CodexhostLatestRelease {
   version: string;

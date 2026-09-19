@@ -318,7 +318,7 @@ const defaultOperations: RendererCdpControlOperations = {
 export async function createRendererCdpControlSession(
   options: CreateRendererCdpControlOptions,
 ): Promise<RendererCdpControlSession> {
-  const enabledAgents = options.enabledAgents ?? ["codex", "pi"];
+  const enabledAgents = options.enabledAgents ?? ["codex", "deepseek-harness", "opencode"];
   const timeoutMs = options.timeoutMs ?? 30_000;
   const pollIntervalMs = options.pollIntervalMs ?? 250;
   const operations = options.operations ?? defaultOperations;

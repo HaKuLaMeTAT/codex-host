@@ -508,7 +508,7 @@ function startupTrace(stage: string): void {
 export async function createRendererControlSession(
   options: CreateRendererControlOptions,
 ): Promise<RendererControlSession> {
-  const enabledAgents = options.enabledAgents ?? ["codex", "pi"];
+  const enabledAgents = options.enabledAgents ?? ["codex", "deepseek-harness", "opencode"];
   const timeoutMs = options.timeoutMs ?? 30_000;
   const pollIntervalMs = options.pollIntervalMs ?? 250;
   const operations = options.operations ?? defaultOperations;

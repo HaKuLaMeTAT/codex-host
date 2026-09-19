@@ -232,6 +232,8 @@ export interface AppServerHostOptions {
   onRequestRoute?: (observation: RequestRouteObservation) => void;
   updateCoordinator?: HostUpdateCoordinator;
   onDelegationApi?: (api: DelegationControlRegistration) => (() => void) | undefined;
+  /** Run only the external Harness protocol. Never connect to the official app-server. */
+  externalOnly?: boolean;
 }
 
 interface TurnProjectionGate {
@@ -484,10 +486,25 @@ export class AppServerHost {
     Pick<AppServerHostOptions, "desktopInput" | "desktopOutput" | "diagnosticOutput">
   > &
     AppServerHostOptions;
-  #officialRuntime: OfficialRuntimeClient;
-  #officialRuntimeScope: OfficialRuntimeScope;
-  #ownsOfficialRuntimeScope: boolean;
-  #accountControl: CodexAccountControl;
+  #nativeRuntime: OfficialRuntimeClient | undefined;
+  #nativeScope: OfficialRuntimeScope | undefined;
+  #ownsOfficialRuntimeScope = false;
+  #nativeAccountControl: CodexAccountControl | undefined;
+
+  get #officialRuntime(): OfficialRuntimeClient {
+    if (!this.#nativeRuntime) throw new Error("Official Codex sessions are outside this Host");
+    return this.#nativeRuntime;
+  }
+
+  get #officialRuntimeScope(): OfficialRuntimeScope {
+    if (!this.#nativeScope) throw new Error("Official Codex sessions are outside this Host");
+    return this.#nativeScope;
+  }
+
+  get #accountControl(): CodexAccountControl {
+    if (!this.#nativeAccountControl) throw new Error("Official Codex accounts are outside this Host");
+    return this.#nativeAccountControl;
+  }
   #nativeAccountObserver: NativeAccountObserver | undefined;
   #externalAdapters: Map<ExternalHarnessId, HarnessAdapter>;
   #pluginDescriptors: HarnessPluginDescriptor[] = [];
@@ -523,6 +540,7 @@ export class AppServerHost {
   readonly #desktopRequests = new DesktopRequestQueue();
   #drainActiveWorkOnInputEnd = false;
   #desktopInputEnded = false;
+  readonly #externalOnly: boolean;
 
   constructor(options: AppServerHostOptions) {
     this.#options = {
@@ -531,74 +549,77 @@ export class AppServerHost {
       diagnosticOutput: process.stderr,
       ...options,
     };
+    this.#externalOnly = options.externalOnly === true;
     this.#writer = new OrderedWriter(this.#options.desktopOutput);
     const environment = this.#options.environment ?? process.env;
-    const permanentHome = path.resolve(environment.CODEX_HOME ?? path.join(os.homedir(), ".codex"));
-    this.#ownsOfficialRuntimeScope = options.officialRuntimeScope === undefined;
-    this.#officialRuntimeScope =
-      options.officialRuntimeScope ??
-      new OfficialRuntimeScope({
-        diagnosticOutput: this.#options.diagnosticOutput,
-        permanentHome,
-        createBackend: () =>
-          createOwnedConnectionBackend(() =>
-            options.createOfficialConnection
-              ? options.createOfficialConnection()
-              : spawnOfficialAppServerConnection({
-                  stockCodexPath: this.#options.stockCodexPath,
-                  arguments: this.#options.arguments,
-                  environment: {
-                    ...officialEnvironment(environment),
-                    CODEX_HOME: permanentHome,
-                  },
-                  ...(this.#options.spawnOfficial
-                    ? { spawnOfficial: this.#options.spawnOfficial }
-                    : {}),
-                }),
-          ),
+    if (!this.#externalOnly) {
+      const permanentHome = path.resolve(environment.CODEX_HOME ?? path.join(os.homedir(), ".codex"));
+      this.#ownsOfficialRuntimeScope = options.officialRuntimeScope === undefined;
+      this.#nativeScope =
+        options.officialRuntimeScope ??
+        new OfficialRuntimeScope({
+          diagnosticOutput: this.#options.diagnosticOutput,
+          permanentHome,
+          createBackend: () =>
+            createOwnedConnectionBackend(() =>
+              options.createOfficialConnection
+                ? options.createOfficialConnection()
+                : spawnOfficialAppServerConnection({
+                    stockCodexPath: this.#options.stockCodexPath,
+                    arguments: this.#options.arguments,
+                    environment: {
+                      ...officialEnvironment(environment),
+                      CODEX_HOME: permanentHome,
+                    },
+                    ...(this.#options.spawnOfficial
+                      ? { spawnOfficial: this.#options.spawnOfficial }
+                      : {}),
+                  }),
+            ),
+        });
+      this.#nativeAccountControl =
+        options.accountControl ??
+        new SingleNativeCodexAccount(() => ({
+          version: 2,
+          currentAccountId: "00000000-0000-4000-8000-000000000001",
+          phase: this.#officialRuntimeScope.gate.phase,
+          revision: this.#officialRuntimeScope.gate.revision,
+          accounts: [
+            {
+              accountId: "00000000-0000-4000-8000-000000000001",
+              label: "Native Codex Account",
+            },
+          ],
+        }));
+      this.#nativeRuntime = new OfficialRuntimeClient({
+        scope: this.#officialRuntimeScope,
+        onBackendStopped: () => {
+          this.#pendingOfficialTurnStarts.clear();
+          this.#activeOfficialTurns.clear();
+          this.#signalActiveWorkChanged();
+        },
+        output: async (output) =>
+          this.#handleOfficialOutput({
+            ...output,
+            accountId: (await this.#currentCodexAccountId()) ?? "signed-out",
+          }),
       });
-    this.#accountControl =
-      options.accountControl ??
-      new SingleNativeCodexAccount(() => ({
-        version: 2,
-        currentAccountId: "00000000-0000-4000-8000-000000000001",
-        phase: this.#officialRuntimeScope.gate.phase,
-        revision: this.#officialRuntimeScope.gate.revision,
-        accounts: [
-          {
-            accountId: "00000000-0000-4000-8000-000000000001",
-            label: "Native Codex Account",
-          },
-        ],
-      }));
-    this.#officialRuntime = new OfficialRuntimeClient({
-      scope: this.#officialRuntimeScope,
-      onBackendStopped: () => {
-        this.#pendingOfficialTurnStarts.clear();
-        this.#activeOfficialTurns.clear();
-        this.#signalActiveWorkChanged();
-      },
-      output: async (output) =>
-        this.#handleOfficialOutput({
-          ...output,
-          accountId: (await this.#currentCodexAccountId()) ?? "signed-out",
-        }),
-    });
-    this.#nativeAccountObserver = this.#accountControl.refresh
-      ? new NativeAccountObserver({
-          control: this.#accountControl,
-          scope: this.#officialRuntimeScope,
-          notify: (method, params) => this.#writer.json({ method, params }),
-          diagnose: () =>
-            this.#diagnose("Codex Account identity or notification could not be updated"),
-        })
-      : undefined;
-    this.#unsubscribeAccountState = this.#officialRuntimeScope.gate.subscribe(() => {
-      const snapshot = this.#accountControl.snapshot();
-      void this.#writer
-        .json({ method: "codexhost/account/changed", params: jsonValueSchema.parse(snapshot) })
-        .catch(() => undefined);
-    });
+      this.#nativeAccountObserver = this.#accountControl.refresh
+        ? new NativeAccountObserver({
+            control: this.#accountControl,
+            scope: this.#officialRuntimeScope,
+            notify: (method, params) => this.#writer.json({ method, params }),
+            diagnose: () =>
+              this.#diagnose("Codex Account identity or notification could not be updated"),
+          })
+        : undefined;
+      this.#unsubscribeAccountState = this.#officialRuntimeScope.gate.subscribe(() => {
+        const snapshot = this.#accountControl.snapshot();
+        void this.#writer
+          .json({ method: "codexhost/account/changed", params: jsonValueSchema.parse(snapshot) })
+          .catch(() => undefined);
+      });
+    }
     this.#repository = new ExternalThreadRepository(
       options.mappingStore ??
         createProductionExternalThreadStore(this.#options.environment ?? process.env),
@@ -689,6 +710,7 @@ export class AppServerHost {
   }
 
   async #closeOfficialRuntime(): Promise<void> {
+    if (this.#externalOnly) return;
     this.#nativeAccountObserver?.close();
     if (this.#ownsOfficialRuntimeScope) await this.#officialRuntimeScope.close();
     await this.#officialRuntime.close();
@@ -752,9 +774,10 @@ export class AppServerHost {
       await this.#closeOfficialRuntime();
       return this.#closeRequested ? 0 : 1;
     }
-    try {
-      await this.#officialRuntime.initialize();
-    } catch (error) {
+    if (!this.#externalOnly) {
+      try {
+        await this.#officialRuntime.initialize();
+      } catch (error) {
       this.#diagnose(`Official app-server connection failed: ${errorMessage(error)}`);
       // Keep the Desktop client attached for Host initialization and later recovery.
       if (this.#ownsOfficialRuntimeScope) {
@@ -762,21 +785,19 @@ export class AppServerHost {
           .stop()
           .catch((closeError: unknown) => this.#diagnose(closeError));
       }
+      }
     }
     // Keep the existing whole-registry loading policy, but do not hold up Desktop initialization.
     void this.#waitForPlugins();
     if (this.#closeRequested) await this.#closeOfficialRuntime();
     try {
-      void this.#officialRuntime
-        .failure()
-        .then(async () => {
+      if (!this.#externalOnly) void this.#officialRuntime.failure().then(async () => {
           // A recovered/shared Scope may have outlived this one-shot failure.
           if (this.#officialRuntimeScope.gate.phase !== "unavailable") return;
           // Prove exit without terminally closing the Scope or detaching Desktop.
           // Backend reconnection must be able to reuse this same native client.
           await this.#officialRuntimeScope.owner.stop();
-        })
-        .catch((error: unknown) => this.#diagnose(error));
+      }).catch((error: unknown) => this.#diagnose(error));
       await this.#forwardDesktop();
       return 0;
     } catch (error) {
@@ -886,6 +907,17 @@ export class AppServerHost {
       const request = requestResult.data;
       if (request.method === "initialize") {
         try {
+          if (this.#externalOnly) {
+            await this.#writer.json({
+              jsonrpc: "2.0",
+              id: request.id,
+              result: {
+                serverInfo: { name: "codexhost-external", version: "1" },
+                capabilities: {},
+              },
+            });
+            continue;
+          }
           const nativeGeneration =
             this.#officialRuntimeScope.gate.phase === "ready"
               ? this.#officialRuntimeScope.owner.generation
@@ -1446,6 +1478,12 @@ export class AppServerHost {
     request: JsonRpcRequest,
     frame: Buffer<ArrayBufferLike>,
   ): Promise<void> {
+    if (this.#externalOnly) {
+      await this.#writer.json(
+        rpcError(request, -32090, "Official Codex sessions are outside this Host"),
+      );
+      return;
+    }
     try {
       await this.#officialRuntime.sendFrame(frame);
     } catch {

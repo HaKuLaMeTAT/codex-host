@@ -104,7 +104,6 @@ export function createHostUpdateCoordinator(
   ): Promise<boolean> {
     if (context.installation.kind === "npm") return true;
     const target = context.metadata.target;
-    if (target === "linux-x64" || target === "linux-arm64") return false;
     try {
       selectInstallerReleaseArtifact(release, target);
       return true;
@@ -225,9 +224,6 @@ export function createHostUpdateCoordinator(
               });
             } else {
               const target = context.metadata.target;
-              if (target === "linux-x64" || target === "linux-arm64") {
-                throw new Error("Linux installer updates are unsupported");
-              }
               const artifact = selectInstallerReleaseArtifact(release, target).source;
               prepared =
                 context.installation.kind === "windows-installer"

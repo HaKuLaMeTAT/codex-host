@@ -391,6 +391,9 @@ fn is_skysight_memory_app_server(arguments: &[OsString]) -> bool {
 /// would corrupt the WebSocket transport.
 #[must_use]
 pub fn should_start_host_runtime(arguments: &[OsString]) -> bool {
+    if env::var_os("CODEXHOST_EXTERNAL_ONLY").as_deref() == Some(OsStr::new("1")) {
+        return false;
+    }
     should_start_host_runtime_for_originator(
         arguments,
         env::var_os(INTERNAL_ORIGINATOR_OVERRIDE_ENV).as_deref(),

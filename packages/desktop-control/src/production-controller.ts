@@ -1,4 +1,7 @@
 import { readFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { spawn, type ChildProcess } from "node:child_process";
+import { createInterface } from "node:readline";
 import path from "node:path";
 
 import {
@@ -14,7 +17,8 @@ import {
 export interface DesktopControllerOptions {
   rendererCdpEndpoint: string;
   rendererPath: string;
-  defaultAgent: "codex" | "pi";
+  hostRuntimePath?: string;
+  defaultAgent: "codex" | "pi" | "deepseek-harness" | "opencode";
   attachmentPort: number;
   attachmentNonce: string;
 }
@@ -111,7 +115,8 @@ export function parseDesktopControllerArguments(
 ): DesktopControllerOptions {
   let endpoint: string | undefined;
   let rendererPath: string | undefined;
-  let defaultAgent: "codex" | "pi" | undefined;
+  let hostRuntimePath: string | undefined;
+  let defaultAgent: "codex" | "pi" | "deepseek-harness" | "opencode" | undefined;
   let attachmentPort: number | undefined;
   let attachmentNonce: string | undefined;
   for (let index = 0; index < arguments_.length; index += 1) {
@@ -134,10 +139,17 @@ export function parseDesktopControllerArguments(
       index += 1;
       continue;
     }
+    if (argument === "--host-runtime") {
+      if (hostRuntimePath !== undefined) throw new Error("--host-runtime may only be provided once");
+      if (!value || !path.isAbsolute(value)) throw new Error("--host-runtime must be an absolute path");
+      hostRuntimePath = path.normalize(value);
+      index += 1;
+      continue;
+    }
     if (argument === "--default-agent") {
       if (defaultAgent !== undefined) throw new Error("--default-agent may only be provided once");
-      if (value !== "codex" && value !== "pi") {
-        throw new Error("--default-agent must be 'codex' or 'pi'");
+      if (value !== "codex" && value !== "pi" && value !== "deepseek-harness" && value !== "opencode") {
+        throw new Error("--default-agent must be 'codex', 'pi', 'deepseek-harness', or 'opencode'");
       }
       defaultAgent = value;
       index += 1;
@@ -179,6 +191,7 @@ export function parseDesktopControllerArguments(
     defaultAgent,
     attachmentPort,
     attachmentNonce,
+    ...(hostRuntimePath ? { hostRuntimePath } : {}),
   };
 }
 
@@ -220,9 +233,41 @@ export async function runDesktopController(
   signal: AbortSignal,
   dependencies: DesktopControllerDependencies = defaultDependencies,
 ): Promise<void> {
-  const configuration = `Object.defineProperty(window, "__codexhostProductionConfigV1", { configurable: true, value: { defaultAgent: ${JSON.stringify(options.defaultAgent)} } });`;
   const now = dependencies.now ?? Date.now;
   let session: RendererCdpControlSession | undefined;
+  let externalHost: ChildProcess | undefined;
+  let externalHostEndpoint: string | undefined;
+  const externalHostToken = randomBytes(32).toString("hex");
+  const startExternalHost = async (): Promise<void> => {
+    if (!options.hostRuntimePath) throw new Error("External Host runtime path is unavailable");
+    const child = spawn(process.execPath, [options.hostRuntimePath, "--codexhost-external-host"], {
+      env: { ...process.env, CODEXHOST_EXTERNAL_HOST_TOKEN: externalHostToken },
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    externalHost = child;
+    if (!child.stderr) throw new Error("External Host diagnostic stream is unavailable");
+    const lines = createInterface({ input: child.stderr });
+    externalHostEndpoint = await new Promise<string>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("External Host did not become ready")), 30_000);
+      lines.on("line", (line) => {
+        const match = line.match(/listening at (http:\/\/127\.0\.0\.1:\d+\/rpc)$/u);
+        if (!match) return;
+        clearTimeout(timer);
+        const endpoint = match[1];
+        if (endpoint) resolve(endpoint);
+      });
+      child.once("exit", (code) => reject(new Error(`External Host exited (${code ?? "unknown"})`)));
+    });
+  };
+  const stopExternalHost = (): void => {
+    if (externalHost && externalHost.exitCode === null) externalHost.kill();
+    externalHost = undefined;
+  };
+  if (options.hostRuntimePath) await startExternalHost();
+  const externalConfig = externalHostEndpoint
+    ? `, externalHostEndpoint: ${JSON.stringify(externalHostEndpoint)}, externalHostToken: ${JSON.stringify(externalHostToken)}`
+    : "";
+  const configuration = `Object.defineProperty(window, "__codexhostProductionConfigV1", { configurable: true, value: { defaultAgent: ${JSON.stringify(options.defaultAgent)}${externalConfig} } });`;
   let nextRecoveryAt = 0;
   let recoveryDelayMs = RECOVERY_RETRY_INITIAL_MS;
   const recordRecoveryFailure = (): void => {
@@ -244,21 +289,8 @@ export async function runDesktopController(
         rendererSource: `${RENDERER_CSP_BOOTSTRAP}\n${configuration}\n${rendererSource}`,
         enabledAgents: [
           "codex",
-          "pi",
-          "claude-code",
           "deepseek-harness",
           "opencode",
-          "grok",
-          "omp",
-          "antigravity",
-          "kiro-cli",
-          "codebuddy",
-          "workbuddy",
-          "cursor-cli",
-          "qoder",
-          "qoder-cn",
-          "zcode",
-          "hermes",
         ],
         timeoutMs: PRODUCTION_INSTALL_TIMEOUT_MS,
       },
@@ -342,5 +374,6 @@ export async function runDesktopController(
     await attachmentServer?.close();
     await operation;
     resetSession();
+    stopExternalHost();
   }
 }

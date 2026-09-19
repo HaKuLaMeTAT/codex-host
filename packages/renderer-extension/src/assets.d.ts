@@ -1,26 +1,25 @@
-declare module "*.png" {
-  const dataUrl: string;
-  export default dataUrl;
-}
-
 declare module "*.svg" {
-  const dataUrl: string;
-  export default dataUrl;
+  const url: string;
+  export default url;
 }
 
 declare module "*.css" {
-  const cssText: string;
-  export default cssText;
+  const url: string;
+  export default url;
 }
 
 declare module "lucide/dist/esm/createElement.mjs" {
-  import type { IconNode, SVGProps } from "lucide";
-  const createElement: (iconNode: IconNode, customAttributes?: SVGProps) => SVGElement;
+  const createElement: (
+    icon: LucideIconNode,
+    attributes: Record<string, unknown>,
+  ) => SVGElement;
   export default createElement;
 }
 
 declare module "lucide/dist/esm/icons/*.mjs" {
-  import type { IconNode } from "lucide";
-  const iconNode: IconNode;
-  export default iconNode;
+  const icon: LucideIconNode;
+  export default icon;
 }
+// The declaration file must stay a script so SVG/CSS ambient modules are global.
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+type LucideIconNode = import("lucide").IconNode;

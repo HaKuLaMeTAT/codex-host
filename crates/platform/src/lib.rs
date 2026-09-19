@@ -14,7 +14,6 @@ mod desktop_launch;
 mod installation;
 #[cfg(target_os = "linux")]
 mod linux_installation;
-mod macos_native_harness_broker;
 #[cfg(target_os = "macos")]
 mod macos_process_observation;
 mod process;
@@ -51,18 +50,6 @@ pub use installation::discover_codex_desktop_from_root;
 pub use installation::discover_desktop_managed_codex_cli;
 #[cfg(target_os = "linux")]
 pub use linux_installation::discover_codex_desktop;
-pub use macos_native_harness_broker::{
-    NATIVE_HARNESS_BROKER_LABEL, NativeHarnessBrokerCommand, NativeHarnessBrokerInstallStep,
-    NativeHarnessBrokerLaunchAgentPlan, NativeHarnessBrokerLaunchctlPlan,
-    NativeHarnessBrokerObservedState, NativeHarnessBrokerPaths, native_harness_broker_label,
-    plan_native_harness_broker_install, plan_native_harness_broker_launch_agent,
-    plan_native_harness_broker_launch_agent_with_environment, plan_native_harness_broker_launchctl,
-};
-#[cfg(target_os = "macos")]
-pub use macos_native_harness_broker::{
-    NativeHarnessBrokerInstallOutcome, NativeHarnessBrokerStatus, inspect_native_harness_broker,
-    install_native_harness_broker, stop_native_harness_broker, uninstall_native_harness_broker,
-};
 #[cfg(target_os = "macos")]
 pub use process::force_stop_desktop;
 pub use process::{

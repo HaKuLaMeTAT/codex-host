@@ -5,7 +5,7 @@ import {
   classifyThreadPurpose,
   RequestRouteObservationTracker,
   type CreateRequestRouteObservation,
-} from "../src/index.js";
+} from "../src/route-observation.js";
 
 const piRoute: CreateRequestRouteObservation = {
   requestMethod: "thread/start",

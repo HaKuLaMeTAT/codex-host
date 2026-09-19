@@ -508,5 +508,3 @@ Rust 继续拥有原生启动、进程管理、安装与平台集成。若平台
 - [Harness 命令集成](harness-command-integration.md)
 - [Harness CLI 发现](harness-executable-discovery.md)
 - [ACP 后续抽取边界](acp-layer-follow-up.md)
-- [SSH 远程 Host](../platforms/remote/remote-ssh-host.zh-CN.md)
-- [Remote Control Host](../platforms/remote/remote-control-host.zh-CN.md)

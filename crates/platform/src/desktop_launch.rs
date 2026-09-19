@@ -57,20 +57,37 @@ fn managed_desktop_environment(
     additional_environment: &[(OsString, OsString)],
 ) -> Result<Vec<(OsString, OsString)>, PlatformError> {
     let shim_path = canonical_existing_file(shim_path)?;
+    let external_only = additional_environment
+        .iter()
+        .any(|(name, value)| name == "CODEXHOST_EXTERNAL_ONLY" && value == "1");
+    let cli_path = if external_only {
+        canonical_existing_file(&installation.executable_codex_cli)?
+    } else {
+        shim_path
+    };
     let mut environment = vec![
         (
             OsString::from(CODEX_CLI_PATH_ENV),
-            shim_path.as_os_str().to_owned(),
+            cli_path.as_os_str().to_owned(),
         ),
         (
             OsString::from(STOCK_CODEX_PATH_ENV),
             installation.executable_codex_cli.as_os_str().to_owned(),
         ),
     ];
-    environment.extend_from_slice(additional_environment);
+    environment.extend(
+        additional_environment
+            .iter()
+            .filter(|(name, value)| {
+                !(name == "CODEXHOST_EXTERNAL_ONLY" && value == "1")
+                    && !(external_only && name.to_string_lossy().starts_with("CODEXHOST_"))
+            })
+            .cloned(),
+    );
     #[cfg(target_os = "windows")]
-    if let Some(runtime) =
-        managed_node_repl_override(&shim_path, std::env::var_os("CODEX_NODE_REPL_PATH"))
+    if !external_only
+        && let Some(runtime) =
+            managed_node_repl_override(&shim_path, std::env::var_os("CODEX_NODE_REPL_PATH"))
     {
         environment.push((OsString::from("CODEX_NODE_REPL_PATH"), runtime));
     }

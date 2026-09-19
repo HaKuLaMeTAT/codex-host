@@ -1,15 +1,3 @@
-import codexAgentIconUrl from "./assets/codex-agent.png";
-import grokAgentIconUrl from "./assets/grok-agent.png";
-import hermesAgentIconUrl from "./assets/hermes-agent.png";
-import antigravityAgentIconUrl from "./assets/antigravity-agent.svg";
-import kiroAgentIconUrl from "./assets/kiro-agent.svg";
-import codeBuddyAgentIconUrl from "./assets/codebuddy-agent.svg";
-import workBuddyAgentIconUrl from "./assets/workbuddy-agent.svg";
-import cursorAgentIconUrl from "./assets/cursor-agent.svg";
-import ompAgentIconUrl from "./assets/omp-agent.svg";
-import openCodeAgentIconUrl from "./assets/opencode-agent.png";
-import zcodeAgentIconUrl from "./assets/zcode-agent.svg";
-import qoderAgentIconUrl from "./assets/qoder-agent.svg";
 import type { RendererAgent } from "./agent-selection-state.js";
 
 export const RENDERER_AGENT_LABELS: Record<RendererAgent, string> = {
@@ -37,6 +25,16 @@ const PI_PATHS = [
     fillRule: "evenodd",
   },
   { d: "M17.5 12H23v11h-5.5V12z" },
+] as const;
+
+const CODEX_PATHS = [
+  { d: "M12 1.5 21.5 7v10L12 22.5 2.5 17V7L12 1.5z", fillRule: "evenodd" },
+  { d: "M12 5.2 6 8.7v6.6l6 3.5 6-3.5V8.7l-6-3.5z", fillRule: "evenodd", fill: "white" },
+] as const;
+
+const OPENCODE_PATHS = [
+  { d: "M4 4h5v5H4zM15 4h5v5h-5zM4 15h5v5H4zM15 15h5v5h-5z" },
+  { d: "M9 6.5h6v2H9zM6.5 9v6h2V9zM15.5 9v6h2V9zM9 15.5h6v2H9z" },
 ] as const;
 
 // DeepSeek Harness whale mark, exact extract from the official dsh web
@@ -78,20 +76,10 @@ export function createRendererAgentIcon(
   ownerDocument: Document = document,
 ): Element {
   if (agent === "codex") {
-    const image = ownerDocument.createElement("img");
-    image.src = codexAgentIconUrl;
-    image.alt = "";
-    image.draggable = false;
-    image.style.width = `${size}px`;
-    image.style.height = `${size}px`;
-    image.style.objectFit = "contain";
-    image.style.flex = "none";
-    return image;
+    return createSvgIcon(CODEX_PATHS, "currentColor", size, ownerDocument);
   }
   if (agent === "pi") return createSvgIcon(PI_PATHS, "currentColor", size, ownerDocument);
-  if (agent === "claude-code") {
-    return createSvgIcon([{ d: CLAUDE_PATH }], "#d97757", size, ownerDocument);
-  }
+  if (agent === "claude-code") return createSvgIcon([{ d: CLAUDE_PATH }], "#d97757", size, ownerDocument);
   if (agent === "deepseek-harness") {
     return createSvgIcon(
       [{ d: DEEPSEEK_HARNESS_WHALE_PATH }],
@@ -102,88 +90,8 @@ export function createRendererAgentIcon(
     );
   }
   if (agent === "opencode") {
-    const image = ownerDocument.createElement("img");
-    image.src = openCodeAgentIconUrl;
-    image.alt = "";
-    image.draggable = false;
-    image.style.width = `${size}px`;
-    image.style.height = `${size}px`;
-    image.style.objectFit = "contain";
-    image.style.flex = "none";
-    return image;
+    return createSvgIcon(OPENCODE_PATHS, "currentColor", size, ownerDocument);
   }
-  if (agent === "omp") {
-    const image = ownerDocument.createElement("img");
-    image.src = ompAgentIconUrl;
-    image.alt = "";
-    image.draggable = false;
-    image.style.width = `${size}px`;
-    image.style.height = `${size}px`;
-    image.style.objectFit = "contain";
-    image.style.borderRadius = "22.37%";
-    image.style.flex = "none";
-    return image;
-  }
-  if (
-    agent === "antigravity" ||
-    agent === "kiro-cli" ||
-    agent === "codebuddy" ||
-    agent === "workbuddy" ||
-    agent === "cursor-cli"
-  ) {
-    const image = ownerDocument.createElement("img");
-    image.src =
-      agent === "codebuddy"
-        ? codeBuddyAgentIconUrl
-        : agent === "workbuddy"
-          ? workBuddyAgentIconUrl
-          : agent === "cursor-cli"
-            ? cursorAgentIconUrl
-            : agent === "kiro-cli"
-              ? kiroAgentIconUrl
-              : antigravityAgentIconUrl;
-    image.alt = "";
-    image.draggable = false;
-    image.style.width = `${size}px`;
-    image.style.height = `${size}px`;
-    image.style.objectFit = "contain";
-    image.style.flex = "none";
-    return image;
-  }
-  if (agent === "hermes") {
-    const image = ownerDocument.createElement("img");
-    image.src = hermesAgentIconUrl;
-    image.alt = "";
-    image.draggable = false;
-    image.style.width = `${size}px`;
-    image.style.height = `${size}px`;
-    image.style.objectFit = "contain";
-    image.style.boxSizing = "border-box";
-    image.style.padding = `${Math.max(1, Math.round(size / 16))}px`;
-    image.style.borderRadius = "22.37%";
-    image.style.background = "#d8d8e8";
-    image.style.flex = "none";
-    return image;
-  }
-  if (agent === "qoder" || agent === "qoder-cn" || agent === "zcode") {
-    const image = ownerDocument.createElement("img");
-    image.src = agent === "zcode" ? zcodeAgentIconUrl : qoderAgentIconUrl;
-    image.alt = "";
-    image.draggable = false;
-    image.style.width = `${size}px`;
-    image.style.height = `${size}px`;
-    image.style.objectFit = "contain";
-    image.style.flex = "none";
-    return image;
-  }
-  const mark = ownerDocument.createElement("img");
-  mark.src = grokAgentIconUrl;
-  mark.alt = "";
-  mark.draggable = false;
-  mark.style.width = `${size}px`;
-  mark.style.height = `${size}px`;
-  mark.style.objectFit = "contain";
-  mark.style.borderRadius = "22.37%";
-  mark.style.flex = "none";
-  return mark;
+  if (agent === "omp" || agent === "hermes" || agent === "antigravity" || agent === "kiro-cli" || agent === "codebuddy" || agent === "workbuddy" || agent === "cursor-cli" || agent === "qoder" || agent === "qoder-cn" || agent === "zcode") return createSvgIcon(OPENCODE_PATHS, "currentColor", size, ownerDocument);
+  return createSvgIcon(OPENCODE_PATHS, "currentColor", size, ownerDocument);
 }

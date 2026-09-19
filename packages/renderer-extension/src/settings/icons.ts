@@ -33,7 +33,6 @@ import CircleHelp from "lucide/dist/esm/icons/circle-question-mark.mjs";
 import X from "lucide/dist/esm/icons/x.mjs";
 import Users from "lucide/dist/esm/icons/users.mjs";
 import Plus from "lucide/dist/esm/icons/plus.mjs";
-import codexLogoUrl from "../assets/codex-logo-bright.png";
 
 export const RENDERER_SETTINGS_ICON_NAMES = [
   "settings",
@@ -126,17 +125,16 @@ export function createRendererSettingsIcon(name: RendererSettingsIconName, size 
   return icon;
 }
 
-export function createRendererSettingsBrandIcon(size = 22): HTMLImageElement {
-  const icon = document.createElement("img");
-  icon.src = codexLogoUrl;
-  icon.alt = "";
-  icon.width = size;
-  icon.height = size;
-  icon.draggable = false;
+export function createRendererSettingsBrandIcon(size = 22): SVGElement {
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("width", String(size));
+  icon.setAttribute("height", String(size));
   icon.setAttribute("aria-hidden", "true");
-  icon.style.width = `${size}px`;
-  icon.style.height = `${size}px`;
-  icon.style.objectFit = "contain";
   icon.classList.add("codexhost-settings-icon");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M12 1.5 21.5 7v10L12 22.5 2.5 17V7L12 1.5z");
+  path.setAttribute("fill", "currentColor");
+  icon.append(path);
   return icon;
 }

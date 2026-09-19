@@ -34,6 +34,7 @@ import {
   createThreadUsageSubscriptionRelay,
   type RendererModelClient,
 } from "./renderer-model-client.js";
+import { installRendererExternalChannel } from "./renderer-external-channel.js";
 
 export const PI_TRANSPORT_MODEL_ID = "codexhost/pi-native";
 export const PI_TRANSPORT_MODEL_PREFIX = `${PI_TRANSPORT_MODEL_ID}@`;
@@ -144,7 +145,9 @@ interface RendererDraftPrewarmPolicyTarget {
 }
 
 const DRAFT_PREWARM_POLICY_WAIT_TIMEOUT_MS = 10_000;
-const DRAFT_PREWARM_POLICY_POLL_INTERVAL_MS = 25;
+// Composer discovery is a startup fallback. A 25 ms document-wide poll kept
+// running across multiple Renderer bindings and created avoidable CPU churn.
+const DRAFT_PREWARM_POLICY_POLL_INTERVAL_MS = 250;
 
 declare global {
   interface Window {
@@ -1058,6 +1061,8 @@ export function installCurrentRendererAdapter(): {
       // A new connection must not inherit unsupported-method observations.
       // Turn controls belong to the manager, so do not install duplicate hooks.
       if (!cached) {
+        const externalChannelCleanup = installRendererExternalChannel(target);
+        if (externalChannelCleanup) turnControlCleanups.add(externalChannelCleanup);
         const queueCleanup = installRendererExternalQueue(target);
         if (queueCleanup) turnControlCleanups.add(queueCleanup);
         const steeringCleanup = installRendererExternalSteering(target);
@@ -1234,9 +1239,6 @@ export function installCurrentRendererAdapter(): {
       captureRoutingPolicy();
     });
     policyRecaptureObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["hidden", "aria-hidden", "data-codex-composer-root"],
-      characterData: true,
       childList: true,
       subtree: true,
     });

@@ -149,6 +149,34 @@ interface RequestManagerCandidate {
   requestClient?: RequestManagerCandidate;
 }
 
+declare global {
+  interface Window {
+    __codexhostExternalHostV1?: { endpoint: string; token: string };
+  }
+}
+
+export async function sendExternalHostRequest(method: string, params: unknown): Promise<unknown> {
+  const configuration = window.__codexhostExternalHostV1;
+  if (!configuration) throw new Error("External codexhost Host is unavailable");
+  const response = await fetch(configuration.endpoint, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${configuration.token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: crypto.randomUUID(), method, params }),
+  });
+  const value: unknown = await response.json();
+  if (!response.ok) throw new Error(`External Host request failed (${response.status})`);
+  if (isRecord(value) && "error" in value) {
+    const error = value.error;
+    throw Object.assign(new Error(isRecord(error) && typeof error.message === "string" ? error.message : "External Host RPC failed"), {
+      code: isRecord(error) && typeof error.code === "number" ? error.code : -32090,
+    });
+  }
+  return isRecord(value) && "result" in value ? value.result : value;
+}
+
 function notificationTarget(manager: RequestManagerCandidate): RequestManagerCandidate | null {
   if (typeof manager.addNotificationCallback === "function") return manager;
   const nested = manager.requestClient;
@@ -247,9 +275,13 @@ export function createRendererModelClient(
   );
   const source = managers[0];
   if (managers.length !== 1 || !source) return null;
+  const externalHostConfiguration =
+    typeof window === "undefined" ? undefined : window.__codexhostExternalHostV1;
   const manager = {
     sendRequest: createRendererRequestSender((method, params) =>
-      source.sendRequest(method, params),
+      method.startsWith("codexhost/") && externalHostConfiguration
+        ? sendExternalHostRequest(method, params)
+        : source.sendRequest(method, params),
     ),
   };
 

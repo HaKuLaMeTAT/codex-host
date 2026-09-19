@@ -2,30 +2,6 @@ export const NODE_VERSION = "24.13.1";
 export const NODE_DIST_BASE_URL = `https://nodejs.org/dist/v${NODE_VERSION}`;
 
 export const RELEASE_TARGETS = Object.freeze({
-  "macos-arm64": Object.freeze({
-    id: "macos-arm64",
-    hostPlatform: "darwin",
-    rustTarget: "aarch64-apple-darwin",
-    installerArchitecture: "arm64",
-    executableSuffix: "",
-    nodeArchive: `node-v${NODE_VERSION}-darwin-arm64.tar.gz`,
-    nodeArchiveSha256: "8c039d59f2fec6195e4281ad5b0d02b9a940897b4df7b849c6fb48be6787bba6",
-    nodeArchiveFormat: "tar.gz",
-    nodeArchiveRoot: `node-v${NODE_VERSION}-darwin-arm64`,
-    nodeExecutable: "bin/node",
-  }),
-  "macos-x64": Object.freeze({
-    id: "macos-x64",
-    hostPlatform: "darwin",
-    rustTarget: "x86_64-apple-darwin",
-    installerArchitecture: "x64",
-    executableSuffix: "",
-    nodeArchive: `node-v${NODE_VERSION}-darwin-x64.tar.gz`,
-    nodeArchiveSha256: "527f0578d9812e7dfa225121bda0b1546a6a0e4b5f556295fc8299c272de5fbf",
-    nodeArchiveFormat: "tar.gz",
-    nodeArchiveRoot: `node-v${NODE_VERSION}-darwin-x64`,
-    nodeExecutable: "bin/node",
-  }),
   "windows-x64": Object.freeze({
     id: "windows-x64",
     hostPlatform: "win32",
@@ -49,20 +25,6 @@ export const RELEASE_TARGETS = Object.freeze({
     nodeArchiveFormat: "zip",
     nodeArchiveRoot: `node-v${NODE_VERSION}-win-arm64`,
     nodeExecutable: "node.exe",
-  }),
-  "linux-x64": Object.freeze({
-    id: "linux-x64",
-    hostPlatform: "linux",
-    rustTarget: "x86_64-unknown-linux-gnu",
-    packageArchitecture: "x64",
-    executableSuffix: "",
-  }),
-  "linux-arm64": Object.freeze({
-    id: "linux-arm64",
-    hostPlatform: "linux",
-    rustTarget: "aarch64-unknown-linux-gnu",
-    packageArchitecture: "arm64",
-    executableSuffix: "",
   }),
 });
 
@@ -96,12 +58,8 @@ export function releaseTargetForHost(name, hostPlatform = process.platform) {
 }
 
 export function hostReleaseTargetId(platform = process.platform, arch = process.arch) {
-  if (platform === "darwin" && arch === "arm64") return "macos-arm64";
-  if (platform === "darwin" && arch === "x64") return "macos-x64";
   if (platform === "win32" && arch === "x64") return "windows-x64";
   if (platform === "win32" && arch === "arm64") return "windows-arm64";
-  if (platform === "linux" && arch === "x64") return "linux-x64";
-  if (platform === "linux" && arch === "arm64") return "linux-arm64";
   throw new Error(`unsupported npm release host: ${platform}/${arch}`);
 }
 
