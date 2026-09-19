@@ -236,7 +236,34 @@ class BrowserSidebarAgentIconDom implements SidebarAgentIconDom {
   }
 
   observe(onChange: () => void): () => void {
-    const observer = new MutationObserver(onChange);
+    const containsSidebarRow = (node: Node): boolean => {
+      if (node.nodeType !== Node.ELEMENT_NODE) return false;
+      const element = node as Element;
+      return (
+        element.matches(SIDEBAR_THREAD_ROW_SELECTOR) ||
+        element.querySelector(SIDEBAR_THREAD_ROW_SELECTOR) !== null
+      );
+    };
+    const observer = new MutationObserver((mutations) => {
+      if (
+        mutations.some((mutation) => {
+          if (mutation.type === "attributes") {
+            return (
+              mutation.target instanceof Element &&
+              mutation.target.matches(SIDEBAR_THREAD_ROW_SELECTOR)
+            );
+          }
+          if (mutation.type !== "childList") return false;
+          return (
+            (mutation.target instanceof Element &&
+              mutation.target.closest(SIDEBAR_THREAD_ROW_SELECTOR) !== null) ||
+            [...mutation.addedNodes, ...mutation.removedNodes].some(containsSidebarRow)
+          );
+        })
+      ) {
+        onChange();
+      }
+    });
     observer.observe(this.root, {
       attributes: true,
       attributeFilter: [SIDEBAR_THREAD_ID_ATTRIBUTE, SIDEBAR_THREAD_HOST_ID_ATTRIBUTE],
@@ -356,6 +383,7 @@ export function installRendererSidebarAgentIcons(options: {
     scanScheduled = false;
     if (disposed) return;
     const unresolvedByHost = new Map<string, Set<ReturnType<typeof hostThreadIdSchema.parse>>>();
+    const visibleKeys = new Set<string>();
     for (const row of dom.rows()) {
       if (!row.isConnected()) {
         row.clear();
@@ -387,6 +415,7 @@ export function installRendererSidebarAgentIcons(options: {
         continue;
       }
       const key = ownershipKey(hostId, threadId.data);
+      visibleKeys.add(key);
       if (ownershipByThread.has(key)) {
         const agent = ownershipByThread.get(key);
         if (agent) row.render(agent);
@@ -402,6 +431,19 @@ export function installRendererSidebarAgentIcons(options: {
         }
         unresolved.add(threadId.data);
       }
+    }
+    // Sidebar virtualization and navigation can remove rows without deleting
+    // the corresponding ownership cache entries. Keep the cache bounded by
+    // the rows currently represented in the DOM.
+    for (const key of ownershipByThread.keys()) {
+      if (visibleKeys.has(key)) continue;
+      ownershipByThread.delete(key);
+      failed.delete(key);
+      provisionalCodex.delete(key);
+      const timer = ownershipRetryTimers.get(key);
+      if (timer !== undefined) clearTimeout(timer);
+      ownershipRetryTimers.delete(key);
+      ownershipRetryAttempts.delete(key);
     }
     for (const [hostId, unresolved] of unresolvedByHost) {
       const client = options.getClient(hostId);

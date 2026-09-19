@@ -74,6 +74,10 @@ interface ConversationState {
   state: MutableComposerState;
 }
 
+// Keep enough recent conversation state for normal back-and-forth navigation
+// without retaining every thread ever opened in the Desktop renderer.
+const MAX_CONVERSATION_STATES = 64;
+
 export interface DraftAgentControllerOptions {
   idFactory?: (sequence: number) => string;
   enabledAgents?: readonly RendererAgent[];
@@ -149,7 +153,7 @@ export class DraftAgentController<Composer extends object> {
         : this.#lastSubmittedAgent;
     const state = this.#state(composer, isDefaultTarget(target) ? preferredAgent : "codex");
     if (isConversationTarget(target)) {
-      this.#conversationStates.push({ target, state });
+      this.#rememberConversationState({ target, state });
     }
     return state;
   }
@@ -201,7 +205,7 @@ export class DraftAgentController<Composer extends object> {
         phase: "draft",
         composerId: this.#idFactory(++this.#composerSequence),
       };
-      this.#conversationStates.push({ target, state });
+      this.#rememberConversationState({ target, state });
     }
     this.#states.set(composer, state);
     this.#modelRequestGenerations.set(state, ++this.#modelRequestSequence);
@@ -522,7 +526,7 @@ export class DraftAgentController<Composer extends object> {
       this.#states.set(replacement, state);
     }
     if (isConversationTarget(target) && !bound) {
-      this.#conversationStates.push({ target, state });
+      this.#rememberConversationState({ target, state });
     }
     if (isConversationTarget(target) && this.#pendingSubmissions.delete(state)) {
       state.phase = "locked";
@@ -564,10 +568,21 @@ export class DraftAgentController<Composer extends object> {
 
   #conversationState(target: readonly unknown[] | null): MutableComposerState | null {
     if (!isConversationTarget(target)) return null;
-    return (
-      this.#conversationStates.find((candidate) => sameTarget(candidate.target, target))?.state ??
-      null
+    const index = this.#conversationStates.findIndex((candidate) =>
+      sameTarget(candidate.target, target),
     );
+    if (index < 0) return null;
+    const [entry] = this.#conversationStates.splice(index, 1);
+    if (!entry) return null;
+    this.#conversationStates.push(entry);
+    return entry.state;
+  }
+
+  #rememberConversationState(entry: ConversationState): void {
+    this.#conversationStates.push(entry);
+    if (this.#conversationStates.length > MAX_CONVERSATION_STATES) {
+      this.#conversationStates.splice(0, this.#conversationStates.length - MAX_CONVERSATION_STATES);
+    }
   }
 
   #state(composer: Composer, initialAgent?: RendererAgent): MutableComposerState {

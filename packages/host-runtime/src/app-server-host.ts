@@ -516,7 +516,6 @@ export class AppServerHost {
   #pendingDesktopQuestions = new Map<HostQuestionRequestId, PendingDesktopQuestion>();
   #nextApprovalRequestId = HOST_APPROVAL_REQUEST_ID_MAX;
   #nextQuestionRequestId = HOST_QUESTION_REQUEST_ID_MAX;
-  #delegationCoordinator: HarnessDelegationCoordinator;
   #sessionImportRequests: SessionImportRequests | undefined;
   #unregisterDelegationApi: (() => void) | undefined;
   #unsubscribeAccountState: (() => void) | undefined;
@@ -659,41 +658,40 @@ export class AppServerHost {
           ![...this.#pendingDesktopQuestions.values()].some((pending) => pending.thread === thread),
       },
     });
-    this.#delegationCoordinator = new HarnessDelegationCoordinator({
-      adapters: this.#externalAdapters,
-      environment: this.#options.environment ?? process.env,
-      externalRuntime: this.#externalRuntime,
-      repository: this.#repository,
-      registerExternalThread: (input) => this.#registerExternalThread(input),
-      startExternalTurn: (thread, text, turnId) =>
-        this.#startDelegatedExternalTurn(thread, text, turnId),
-      notifyThreadStarted: (thread) => this.#notifyExternalThreadStarted(thread),
-      inspectOfficial: (input) => this.#inspectOfficialDelegationTarget(input),
-      readOfficial: (input) => this.#readOfficialDelegationThread(input),
-      sendOfficial: (input) => this.#sendOfficialDelegationThread(input),
-      cancelOfficial: (input) => this.#cancelOfficialDelegationThread(input),
-      startOfficial: (input) => this.#startOfficialDelegation(input),
-      listOfficial: (input) => this.#listDelegationThreads(input),
-      officialThreadCwd: (threadId) => this.#readOfficialThreadCwd(threadId),
-      activeOfficialParents: () => [...this.#activeOfficialTurns.keys()],
-    });
-    const unregisterDelegationApi = options.onDelegationApi?.({
-      listHarnesses: () =>
-        this.#waitForPlugins().then(() => this.#delegationCoordinator.listHarnesses()),
-      inspect: (input) =>
-        this.#waitForPlugins().then(() => this.#delegationCoordinator.inspect(input)),
-      start: (input) => this.#waitForPlugins().then(() => this.#delegationCoordinator.start(input)),
-      send: (input) => this.#waitForPlugins().then(() => this.#delegationCoordinator.send(input)),
-      cancel: (input) =>
-        this.#waitForPlugins().then(() => this.#delegationCoordinator.cancel(input)),
-      read: (input) => this.#waitForPlugins().then(() => this.#delegationCoordinator.read(input)),
-      wait: (input) => this.#waitForPlugins().then(() => this.#delegationCoordinator.wait(input)),
-      list: (input) => this.#waitForPlugins().then(() => this.#delegationCoordinator.list(input)),
-      canHandleStart: (input) => this.#canHandleDelegationStart(input),
-      ownsThread: (threadId) => this.#ownsDelegationThread(threadId),
-    });
-    this.#unregisterDelegationApi =
-      typeof unregisterDelegationApi === "function" ? unregisterDelegationApi : undefined;
+    if (options.onDelegationApi) {
+      const coordinator = new HarnessDelegationCoordinator({
+        adapters: this.#externalAdapters,
+        environment: this.#options.environment ?? process.env,
+        externalRuntime: this.#externalRuntime,
+        repository: this.#repository,
+        registerExternalThread: (input) => this.#registerExternalThread(input),
+        startExternalTurn: (thread, text, turnId) =>
+          this.#startDelegatedExternalTurn(thread, text, turnId),
+        notifyThreadStarted: (thread) => this.#notifyExternalThreadStarted(thread),
+        inspectOfficial: (input) => this.#inspectOfficialDelegationTarget(input),
+        readOfficial: (input) => this.#readOfficialDelegationThread(input),
+        sendOfficial: (input) => this.#sendOfficialDelegationThread(input),
+        cancelOfficial: (input) => this.#cancelOfficialDelegationThread(input),
+        startOfficial: (input) => this.#startOfficialDelegation(input),
+        listOfficial: (input) => this.#listDelegationThreads(input),
+        officialThreadCwd: (threadId) => this.#readOfficialThreadCwd(threadId),
+        activeOfficialParents: () => [...this.#activeOfficialTurns.keys()],
+      });
+      const unregisterDelegationApi = options.onDelegationApi({
+        listHarnesses: () => this.#waitForPlugins().then(() => coordinator.listHarnesses()),
+        inspect: (input) => this.#waitForPlugins().then(() => coordinator.inspect(input)),
+        start: (input) => this.#waitForPlugins().then(() => coordinator.start(input)),
+        send: (input) => this.#waitForPlugins().then(() => coordinator.send(input)),
+        cancel: (input) => this.#waitForPlugins().then(() => coordinator.cancel(input)),
+        read: (input) => this.#waitForPlugins().then(() => coordinator.read(input)),
+        wait: (input) => this.#waitForPlugins().then(() => coordinator.wait(input)),
+        list: (input) => this.#waitForPlugins().then(() => coordinator.list(input)),
+        canHandleStart: (input) => this.#canHandleDelegationStart(input),
+        ownsThread: (threadId) => this.#ownsDelegationThread(threadId),
+      });
+      this.#unregisterDelegationApi =
+        typeof unregisterDelegationApi === "function" ? unregisterDelegationApi : undefined;
+    }
   }
 
   close(): void {

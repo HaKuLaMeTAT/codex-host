@@ -629,9 +629,19 @@ export function applyComposerModelWrite(
 }
 
 function mutationMayChangeComposerTarget(mutation: MutationRecord): boolean {
+  // Text mutations cannot create or remove a Composer. They are frequent in
+  // streamed transcripts, so handling them here would rescan the whole page
+  // for every token.
+  if (mutation.type === "characterData") return false;
   const target =
     mutation.target instanceof Element ? mutation.target : mutation.target.parentElement;
-  return !target || editorForElement(target) === null;
+  if (!target) return true;
+  if (mutation.type === "attributes") {
+    return (
+      target.matches(CODEX_COMPOSER_SELECTOR) || target.closest(CODEX_COMPOSER_SELECTOR) !== null
+    );
+  }
+  return editorForElement(target) === null;
 }
 
 function catalogWithConfigurationState(
@@ -2663,7 +2673,6 @@ export function installRendererBindingProbe(
   mutationObserver.observe(document.documentElement, {
     attributes: true,
     attributeFilter: ["hidden", "aria-hidden", "data-codex-composer-root"],
-    characterData: true,
     childList: true,
     subtree: true,
   });
