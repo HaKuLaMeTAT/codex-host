@@ -32,6 +32,7 @@
     "build:rust": "cargo build --locked --package codexhost-launcher --package codexhost-platform --package codexhost-shim --package codexhost-updater",
     "release:prepare": "node scripts/release/prepare-version.mjs",
     "release:package": "node scripts/release/prepare-payload.mjs",
+    "release:portable": "node scripts/release/portable/package.mjs",
     "release:npm": "node scripts/release/prepare-npm.mjs",
     "release:npm:pack": "node scripts/release/prepare-npm.mjs --pack",
     "release:npm:meta": "node scripts/release/prepare-npm-meta.mjs",
