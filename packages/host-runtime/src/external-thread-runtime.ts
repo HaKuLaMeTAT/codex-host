@@ -38,6 +38,7 @@ import { DELEGATION_THREAD_ID_ENV } from "./delegation-types.js";
 import { SessionStateObserver } from "./session-state-observer.js";
 import { DesktopRequestQueue } from "./desktop-request-queue.js";
 import { ExternalThreadIdleRelease } from "./external-thread-idle-release.js";
+import { compactExternalTurns } from "./external-thread-history.js";
 
 export interface TurnProjectionGate {
   promise: Promise<void>;
@@ -277,6 +278,7 @@ export class ExternalThreadRuntime {
     // live status lives in the Host, not in the stored record, so seed it here
     // instead of publishing a Thread that claims to be idle.
     const running = this.#subagentRunning(input.record.hostThreadId);
+    const compactedHistory = compactExternalTurns(input.turns);
     const externalThread: ExternalThread = {
       id: input.record.hostThreadId,
       cwd: input.record.cwd,
@@ -293,12 +295,14 @@ export class ExternalThreadRuntime {
       record: input.record,
       sessionId: input.sessionId,
       stateObserver: new SessionStateObserver(observerState),
-      thread: running
-        ? { ...input.thread, status: { type: "active", activeFlags: [] } }
-        : input.thread,
+      thread: {
+        ...input.thread,
+        turns: compactedHistory.turns,
+        ...(running ? { status: { type: "active", activeFlags: [] } } : {}),
+      },
       transportModelId: input.transportModelId ?? input.record.transportModelId,
-      turns: input.turns,
-      historyHydrated: true,
+      turns: compactedHistory.turns,
+      historyHydrated: !compactedHistory.truncated,
       running,
       activeTurnId: null,
       latestUsage: input.session.initialUsage,
@@ -446,11 +450,12 @@ export class ExternalThreadRuntime {
     try {
       const aligned = await this.#repository.alignSnapshot(thread.record, snapshot.value);
       thread.record = aligned.record;
-      thread.turns = aligned.turns;
-      thread.historyHydrated = true;
+      const compactedHistory = compactExternalTurns(aligned.turns);
+      thread.turns = compactedHistory.turns;
+      thread.historyHydrated = !compactedHistory.truncated;
       thread.thread = externalThreadValue({
         record: aligned.record,
-        turns: aligned.turns,
+        turns: compactedHistory.turns,
         sessionId: thread.sessionId,
         running: thread.running,
       });

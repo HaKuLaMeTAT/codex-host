@@ -2,6 +2,9 @@ import type { JsonObject, JsonValue } from "@codexhost/protocol-core";
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
+/** Keep active renderer memory bounded; full history is re-read on demand. */
+export const MAX_IN_MEMORY_TURNS = 64;
+export const MAX_IN_MEMORY_HISTORY_BYTES = 512 * 1024;
 
 type SortDirection = "asc" | "desc";
 type ItemsView = "notLoaded" | "summary" | "full";
@@ -28,6 +31,36 @@ export class ExternalHistoryRequestError extends Error {
     super(message);
     this.name = "ExternalHistoryRequestError";
   }
+}
+
+export interface CompactedExternalTurns {
+  turns: JsonObject[];
+  truncated: boolean;
+}
+
+/**
+ * Retain the first user turn and the newest turns while an External Thread is
+ * idle. The native Session remains open; callers mark history as stale so the
+ * next history request refreshes the complete snapshot.
+ */
+export function compactExternalTurns(turns: JsonObject[]): CompactedExternalTurns {
+  let bytes = 0;
+  try {
+    bytes = JSON.stringify(turns).length;
+  } catch {
+    return { turns, truncated: false };
+  }
+  if (turns.length <= MAX_IN_MEMORY_TURNS && bytes <= MAX_IN_MEMORY_HISTORY_BYTES) {
+    return { turns, truncated: false };
+  }
+  const first = turns[0];
+  let tail = turns.slice(-MAX_IN_MEMORY_TURNS);
+  let compacted = first && tail[0] !== first ? [first, ...tail] : tail;
+  while (tail.length > 1 && JSON.stringify(compacted).length > MAX_IN_MEMORY_HISTORY_BYTES) {
+    tail = tail.slice(-Math.ceil(tail.length / 2));
+    compacted = first && tail[0] !== first ? [first, ...tail] : tail;
+  }
+  return { turns: compacted, truncated: compacted.length !== turns.length };
 }
 
 function optionalText(value: JsonValue | undefined, name: string): string | null {

@@ -40,6 +40,8 @@ function sidebarThreadAttributes(element: HTMLElement): {
   return { taskKey, hostId, rowMarker };
 }
 
+const sidebarThreadIdCache = new WeakMap<object, { signature: string; value: string | null }>();
+
 export function draftIdFromSidebarRowElement(element: HTMLElement): string | null {
   const attributes = sidebarThreadAttributes(element);
   if (!attributes) return null;
@@ -54,14 +56,23 @@ export function threadIdFromSidebarRowElement(element: HTMLElement): string | nu
   const attributes = sidebarThreadAttributes(element);
   if (!attributes) return null;
   const { taskKey, hostId, rowMarker } = attributes;
+  const signature = `${hostId}\u0000${taskKey}\u0000${rowMarker}`;
+  const cached = sidebarThreadIdCache.get(element);
+  if (cached?.signature === signature) return cached.value;
 
   const fiberNames = Object.getOwnPropertyNames(element).filter((name) =>
     name.startsWith("__reactFiber$"),
   );
   const fiberName = fiberNames[0];
-  if (fiberNames.length !== 1 || !fiberName) return null;
+  if (fiberNames.length !== 1 || !fiberName) {
+    sidebarThreadIdCache.set(element, { signature, value: null });
+    return null;
+  }
   const firstFiber = Object.getOwnPropertyDescriptor(element, fiberName)?.value;
-  if (!isRecord(firstFiber)) return null;
+  if (!isRecord(firstFiber)) {
+    sidebarThreadIdCache.set(element, { signature, value: null });
+    return null;
+  }
 
   const candidates = new Set<string>();
   let fiber: Record<string, unknown> | null = firstFiber;
@@ -81,7 +92,9 @@ export function threadIdFromSidebarRowElement(element: HTMLElement): string | nu
     }
     fiber = isRecord(fiber.return) ? fiber.return : null;
   }
-  return candidates.size === 1 ? (candidates.values().next().value ?? null) : null;
+  const value = candidates.size === 1 ? (candidates.values().next().value ?? null) : null;
+  sidebarThreadIdCache.set(element, { signature, value });
+  return value;
 }
 
 export function inspectRendererSidebarContract(

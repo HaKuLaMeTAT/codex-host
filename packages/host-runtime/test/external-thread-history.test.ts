@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { JsonObject } from "@codexhost/protocol-core";
 
 import {
+  compactExternalTurns,
   ExternalHistoryRequestError,
+  MAX_IN_MEMORY_TURNS,
   listExternalItems,
   listExternalTurns,
 } from "../src/external-thread-history.js";
@@ -38,6 +40,15 @@ function ids(values: JsonObject[]): unknown[] {
 }
 
 describe("External Thread history pagination", () => {
+  it("compacts large histories while retaining the first and newest Turns", () => {
+    const turns = Array.from({ length: MAX_IN_MEMORY_TURNS + 20 }, (_, index) => turn(index + 1));
+    const result = compactExternalTurns(turns);
+    expect(result.truncated).toBe(true);
+    expect(result.turns[0]?.id).toBe("turn-1");
+    expect(result.turns.at(-1)?.id).toBe(`turn-${turns.length}`);
+    expect(result.turns.length).toBeLessThanOrEqual(MAX_IN_MEMORY_TURNS + 1);
+  });
+
   it("pages Turns newest-first with stable anchor cursors", () => {
     const turns = Array.from({ length: 6 }, (_, index) => turn(index + 1));
     const first = listExternalTurns(turns, { limit: 2, itemsView: "notLoaded" });
