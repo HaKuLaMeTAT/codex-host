@@ -33,6 +33,7 @@ await copyFile(path.join(root, "scripts/release/portable/launcher.mjs"), path.jo
 await copyFile(path.join(root, "scripts/release/portable/start.cmd"), path.join(outputRoot, "start.cmd"));
 await copyFile(path.join(root, "scripts/release/portable/start.vbs"), path.join(outputRoot, "start.vbs"));
 await copyFile(path.join(root, "scripts/release/portable/create-shortcut.ps1"), path.join(outputRoot, "create-shortcut.ps1"));
+await copyFile(path.join(root, "scripts/release/portable/create-shortcut.vbs"), path.join(outputRoot, "create-shortcut.vbs"));
 await copyFile(process.execPath, path.join(runtimeRoot, "node.exe"));
 await writeFile(path.join(outputRoot, "README.txt"), "双击 start.vbs 启动 codexhost light；首次使用可运行 create-shortcut.ps1 创建桌面快捷方式。\r\n", "utf8");
 

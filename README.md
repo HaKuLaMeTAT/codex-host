@@ -39,7 +39,7 @@ npm.cmd run build:rust
 
 ## Windows 便携包
 
-发布命令会生成可直接解压使用的 `codexhost-light-<version>.zip`。首次运行 `create-shortcut.ps1` 创建桌面快捷方式，之后双击快捷方式即可启动 Codex 和 Light；公司电脑不需要安装 Node、npm、Rust 或 Inno Setup：
+发布命令会生成可直接解压使用的 `codexhost-light-<version>.zip`。首次双击 `create-shortcut.vbs` 创建桌面快捷方式，之后双击快捷方式即可启动 Codex 和 Light；公司电脑不需要安装 Node、npm、Rust 或 Inno Setup：
 
 ```powershell
 npm.cmd run build:typescript
